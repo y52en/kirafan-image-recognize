@@ -1,8 +1,16 @@
-import Vue from 'vue'
-import App from './App.vue'
+import Vue from "vue";
+import App from "./App.vue";
+import vuetify from "./plugins/vuetify";
+// import opencv from "./plugins/opencv";
+import router from "./router";
+// import
 
-Vue.config.productionTip = false
+Vue.config.productionTip = false;
+Vue.prototype.$window = window;
 
 new Vue({
-  render: h => h(App),
-}).$mount('#app')
+  vuetify,
+  router,
+  // opencv,
+  render: (h) => h(App),
+}).$mount("#app");

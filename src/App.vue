@@ -1,28 +1,39 @@
-<template>
-  <div id="app">
-    <img alt="Vue logo" src="./assets/logo.png">
-    <HelloWorld msg="Welcome to Your Vue.js App"/>
-  </div>
+<template lang="pug">
+span
+  v-app
+    v-app-bar(app, color="blue", dark, height="40px")
+      //- .d-flex.align-center
+      //-   v-img.shrink.mr-2(
+      //-     :src="require('./assets/favicon.png')",
+      //-     width="37",
+      //-     contain,
+      //-     transition="scale-transition"
+      //-   )
+
+      //-   <v-img
+      //-     alt="Vuetify Name"
+      //-     class="shrink mt-1 hidden-sm-and-down"
+      //-     contain
+      //-     min-width="100"
+      //-     src="https://cdn.vuetifyjs.com/images/logos/vuetify-name-dark.png"
+      //-     width="100"
+      //-   />
+      span アルファ版
+
+      v-spacer
+
+      //- v-btn(icon)
+      //-   v-icon mdi-open-in-new
+
+    v-main
+      router-view
 </template>
 
+
 <script>
-import HelloWorld from './components/HelloWorld.vue'
 
 export default {
-  name: 'App',
-  components: {
-    HelloWorld
-  }
-}
-</script>
+  name: "App",
 
-<style>
-#app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: #2c3e50;
-  margin-top: 60px;
-}
-</style>
+};
+</script>
