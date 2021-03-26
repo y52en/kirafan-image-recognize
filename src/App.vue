@@ -13,7 +13,7 @@
       v-spacer
       v-btn(@click="$window.document.getElementById('imgFile').click()",text)
         v-icon mdi-image
-        span 画像読み込み
+        span 読み込み
         input#imgFile(type="file",style="visibility:visible;width:0;height:0;")
       //- v-btn(@click="$window.document.getElementById('imgFile').click()",text)
       //-   v-icon mdi-reload
