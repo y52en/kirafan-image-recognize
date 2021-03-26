@@ -3,14 +3,21 @@ span
     v-row
         v-col
             v-btn(@click="$window.document.getElementById('imgFile').click()",color="black",dark) 画像読み込み
-            input#imgFile(type="file",style="display:none;")
-        v-col(cols=12) 16:9の画像にのみ対応
-        v-col(cols=12) {{ output }}
-        
-        v-col(cols=12)
-            canvas#canvasInput(style="max-width: 100vw;max-height:calc(100vh - 50px);display:none;")
-        v-col
-            canvas#noChanged(style="max-width: 100vw;max-height:calc(100vh - 50px);/*display:none;")
+            input#imgFile(type="file",style="visibility:visible;width:0;height:0;")
+            v-btn(@click="resetStunPlace()",color="black",dark) スタン位置リセット
+
+        v-col(cols="12") 16:9、またはそれより縦長のスクショにのみ対応
+        v-col 
+          span(v-for='p in ["enermy","player"]')
+            span(v-for=" (elm , i) in stunPlace[p]" ,:key="i")
+              v-btn( cols="2" , @click="slide = {isPlayer:p,place:i};display_slider = (display_slider === p + i)? undefined : p + i") {{ Math.round(elm / stunWidth * 10000) / 100 }} %
+              v-slider.sss(v-if="display_slider === p + i ",min=0,:max="stunWidth",step=1,:value="elm",@input="x = $event;elm= $event",style="max-width:500px")
+        v-col(cols="12") スタンゲージ1pxあたり {{ String(stun1px).replace(/(\.\d{2})\d+/, "$1") }} % 
+
+        v-col(cols="12")
+            canvas#output(style="max-width: 90vw;max-height:calc(100vh - 50px);/*display:none;")
+    canvas#editorUse(style="max-width: 100vw;max-height:calc(100vh - 50px);display:none;")
+    
 </template>
 
 <script>
@@ -19,17 +26,46 @@ import cv from "../../plugins/opencv";
 export default {
   data: () => ({
     stunData: { player: {}, enermy: {} },
+    stunPlace: { player: {}, enermy: {} },
+    stunPlace_default: { player: {}, enermy: {} },
+
+    display_slider: undefined,
+    editedImg: undefined,
     stunWidth: 0,
-    output: "",
+
+    x: 0,
+    slide: {
+      isPlayer: undefined,
+      place: -1,
+    },
+
+    is1334_750: false,
   }),
+
+  computed: {
+    stun1px() {
+      return 100 / this.stunWidth;
+    },
+    canvas() {
+      return {
+        editorUse: document.getElementById("editorUse"),
+        output: document.getElementById("output"),
+      };
+    },
+  },
 
   methods: {
     transpose(a) {
-      return Object.keys(a[0]).map(function (c) {
-        return a.map(function (r) {
-          return r[c];
-        });
-      });
+      return Object.keys(a[0]).map((c) => a.map((r) => r[c]));
+    },
+    ObjectCopy(obj) {
+      return JSON.parse(JSON.stringify(obj));
+    },
+    resetStunPlace() {
+      this.stunPlace = this.ObjectCopy(this.stunPlace_default);
+    },
+    isPlayerStr(isPlayer) {
+      return isPlayer ? "player" : "enermy";
     },
     thresholding(img) {
       return new Promise((resolve) => {
@@ -38,7 +74,7 @@ export default {
           const dst = new cv.Mat();
           cv.cvtColor(src, src, cv.COLOR_RGB2GRAY, 0);
           cv.Canny(src, dst, 50, 100, 3, false);
-          cv.imshow("canvasInput", dst);
+          cv.imshow("editorUse", dst);
           src.delete();
           dst.delete();
           resolve();
@@ -60,39 +96,114 @@ export default {
       });
     },
     getLineData(array) {
-      return array.reduce((accumulator, currentValue, index) => {
-        if (index % 4 === 0) {
-          // 0 ,4,8
-          accumulator[
-            ((index - (index % 4)) / 4) % (array.length / 12)
-          ] += currentValue;
-        }
+      return array.reduce((accumulator, currentValue, x) => {
+        accumulator[x] = currentValue.reduce(
+          (accumulator, currentValue) => accumulator + currentValue[0],
+          0
+        );
         return accumulator;
-      }, new Array(array.length / 12).fill(0));
+      }, new Array(array.length).fill(0));
     },
     async loadImg(path = require("../../assets/sc2.png")) {
-      const img = new Image();
+      let img = new Image();
+      const canvas = this.canvas.editorUse;
+      const canvas2 = this.canvas.output;
       await this.imgOnload(img, path);
-      const canvas = document.getElementById("canvasInput");
-      const canvas2 = document.getElementById("noChanged");
 
-      const elm = [canvas, canvas2];
-      elm.forEach((x) => {
-        x.width = img.width;
-        x.height = img.height;
-      });
+      if (img.width === 1334 && img.height === 750) {
+        this.is1334_750 = true;
+      } else {
+        this.is1334_750 = false;
+        if (img.width / img.height > 16 / 9) {
+          const tmpCanvas = document.createElement("canvas");
+          const ctx = this.canvasInit(tmpCanvas, img);
+          ctx.drawImage(img, 0, 0);
+          let imgData = this.getColorMap(
+            tmpCanvas,
+            0,
+            0,
+            tmpCanvas.width,
+            tmpCanvas.height
+          );
+          {
+            let rmBlackArea = false;
+            //eslint-disable-next-line
+            while (true) {
+              const elm = imgData[0];
+              const colorSum = elm.reduce(
+                (accumulator, currentValue) =>
+                  accumulator +
+                  currentValue.slice(0, -1).reduce((a, c) => a + c),
+                0
+              );
+              if (colorSum <= 50 * elm.length) {
+                rmBlackArea = true;
+                imgData.shift();
+              } else {
+                break;
+              }
+            }
+            if (!rmBlackArea) {
+              //eslint-disable-next-line
+              while (true) {
+                const elm = imgData[imgData.length - 1];
+                const colorSum = elm.reduce(
+                  (accumulator, currentValue) =>
+                    accumulator +
+                    currentValue.slice(0, -1).reduce((a, c) => a + c),
+                  0
+                );
+                if (colorSum <= 50 * elm.length) {
+                  imgData.pop();
+                } else {
+                  break;
+                }
+              }
+            }
+          }
+          const height = imgData[0].length;
+          const width = imgData.length;
+          const trimWidth = Math.floor((height / 9) * 16);
+          const logoSpace = Math.floor((width - trimWidth) / 2);
+          if (logoSpace !== 0 && width / height > 16 / 9) {
+            imgData = imgData.slice(logoSpace, -logoSpace);
+          }
 
-      canvas2.getContext("2d").drawImage(img, 0, 0);
+          const imageData = this.ColorMapToImageData(imgData);
+          this.canvasInit(tmpCanvas, imageData).putImageData(imageData, 0, 0);
+          const blob = await this.toBlob(tmpCanvas);
+          const imgUrl = URL.createObjectURL(blob);
+          await this.imgOnload(img, imgUrl);
+        }
+      }
+      this.editedImg = img;
+
+      this.canvasInit(canvas2, img).drawImage(img, 0, 0);
+      this.canvasInit(canvas, canvas2);
 
       await this.thresholding(img);
     },
+    toBlob(CanvasElement) {
+      return new Promise((resolve, reject) => {
+        try {
+          CanvasElement.toBlob(resolve);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    },
+    canvasInit(canvas, img) {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      return canvas.getContext("2d");
+    },
     x_start(isPlayer, place) {
-      const initPlace = isPlayer ? 786 : 59;
+      let initPlace = isPlayer ? 786 : 60;
+      if (this.is1334_750 && !isPlayer) initPlace--;
       return initPlace + 194 * place;
     },
     getStunData(isPlayer, place) {
-      const canvas = document.getElementById("canvasInput");
-      // const canvas = document.getElementById("noChanged");
+      const canvas = this.canvas.editorUse;
       const ctx = canvas.getContext("2d");
 
       const x_width = 137;
@@ -112,64 +223,110 @@ export default {
 
       ctx.fillStyle = "#00FFFF";
 
-      const b = ctx.getImageData(...coordinate).data;
+      const b = this.getColorMap(canvas, ...coordinate);
       // ctx.fillRect(...coordinate);
 
-      this.stunData[isPlayer ? "player" : "enermy"][
+      this.stunData[this.isPlayerStr(isPlayer)][
         String(place)
       ] = this.getLineData(b);
     },
-    getStunRate(isPlayer, place) {
-      // const canvas = document.getElementById("canvasInput");
-      const canvas = document.getElementById("noChanged");
-      const ctx = canvas.getContext("2d");
+    getColorMap(canvas, ...coordinate) {
+      const width = coordinate[2];
+      const height = coordinate[3];
+      const output = this.create2DArray(width, height);
 
-      const data = this.stunData[isPlayer ? "player" : "enermy"][String(place)];
+      const ctx = canvas.getContext("2d");
+      ctx.getImageData(...coordinate).data.forEach((value, i) => {
+        const group = (i - (i % 4)) / 4;
+        const x = group % width;
+        const y = Math.floor(group / width);
+        if (i % 4 === 0) {
+          output[x][y] = new Array(4);
+        }
+        output[x][y][i % 4] = value;
+      });
+      return output;
+    },
+    ColorMapToImageData(ColorMap) {
+      const imgData = document
+        .createElement("canvas")
+        .getContext("2d")
+        .createImageData(ColorMap.length, ColorMap[0].length);
+      let i = 0;
+      this.transpose(ColorMap).forEach((x) => {
+        x.forEach((y) => {
+          y.forEach((color) => {
+            imgData.data[i] = color;
+            i++;
+          });
+        });
+      });
+      return imgData;
+    },
+    create2DArray(N, M, value = 0) {
+      return Array.from({ length: N }, () => new Array(M).fill(value));
+    },
+    getStunRate(isPlayer, place) {
+      const data = this.stunData[this.isPlayerStr(isPlayer)][String(place)];
       let tmp = 0;
       let index = 0;
-      const y_start = 95;
-      const fixed = isPlayer ? 0 : -2;
       data.forEach((x, i) => {
         if (x >= tmp && x >= 255 * 2 && i / this.stunWidth >= 0.01) {
           tmp = x;
           index = i;
         }
       });
-      ctx.fillStyle = "blue";
+      return index;
+    },
+    drawImageAndLine() {
+      const canvas = this.canvas.output;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(this.editedImg, 0, 0);
 
-      ctx.fillRect(
-        Math.floor(
-          canvas.width * (this.x_start(isPlayer, place) / 1334) + index
-        ),
-        Math.floor(canvas.height * (y_start / 750)) + fixed,
-        1,
-        100
-      );
+      const y_start = 95;
+      [false, true].forEach((isPlayer) => {
+        const fixed = isPlayer ? 0 : -2;
+        [0, 1, 2].forEach((place) => {
+          const stunPlace = this.stunPlace[this.isPlayerStr(isPlayer)][
+            String(place)
+          ];
+          ctx.fillStyle = "blue";
+          ctx.fillRect(
+            Math.floor(
+              canvas.width * (this.x_start(isPlayer, place) / 1334) + stunPlace
+            ),
+            Math.floor(canvas.height * (y_start / 750)) + fixed,
+            1,
+            100
+          );
 
-      ctx.fillStyle = "red";
-      //start
-      ctx.fillRect(
-        Math.floor(canvas.width * (this.x_start(isPlayer, place) / 1334) + 0),
-        Math.floor(canvas.height * (y_start / 750)) + fixed,
-        1,
-        100
-      );
-      //end
-      ctx.fillRect(
-        Math.floor(
-          canvas.width * (this.x_start(isPlayer, place) / 1334) + this.stunWidth
-        ),
-        Math.floor(canvas.height * (y_start / 750)) + fixed,
-        1,
-        100
-      );
-      return index / this.stunWidth;
+          ctx.fillStyle = "red";
+          //start
+          ctx.fillRect(
+            Math.floor(
+              canvas.width * (this.x_start(isPlayer, place) / 1334) + 0
+            ),
+            Math.floor(canvas.height * (y_start / 750)) + fixed,
+            1,
+            100
+          );
+          //end
+          ctx.fillRect(
+            Math.floor(
+              canvas.width * (this.x_start(isPlayer, place) / 1334) +
+                this.stunWidth
+            ),
+            Math.floor(canvas.height * (y_start / 750)) + fixed,
+            1,
+            100
+          );
+        });
+      });
     },
   },
 
   async mounted() {
     window.v = this;
-
     document.getElementById("imgFile").addEventListener("change", (e) => {
       const file_reader = new FileReader();
       file_reader.addEventListener("load", async (e) => {
@@ -178,16 +335,23 @@ export default {
         [false, true].forEach((isPlayer) => {
           [0, 1, 2].forEach((place) => {
             this.getStunData(isPlayer, place);
-            this.output += (
-              this.getStunRate(isPlayer, place) * 100 +
-              "% , "
-            ).replace(/(\.\d{2})\d+/, "$1");
+            this.stunPlace[this.isPlayerStr(isPlayer)][
+              String(place)
+            ] = this.getStunRate(isPlayer, place);
           });
-          this.output += "\n";
         });
+        this.stunPlace_default = this.ObjectCopy(this.stunPlace);
+        this.drawImageAndLine();
       });
       file_reader.readAsDataURL(e.target.files[0]);
     });
+  },
+  watch: {
+    x(e) {
+      this.stunPlace[this.slide.isPlayer][this.slide.place] = e;
+      this.stunPlace = this.ObjectCopy(this.stunPlace);
+      this.drawImageAndLine();
+    },
   },
 };
 </script>

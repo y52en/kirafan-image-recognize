@@ -25,7 +25,7 @@ span
       //- v-btn(icon)
       //-   v-icon mdi-open-in-new
 
-    v-main
+    v-main.mx-2
       router-view
 </template>
 
