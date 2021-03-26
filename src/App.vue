@@ -11,7 +11,7 @@
         )
       span 戦闘データ取得ツール
       v-spacer
-      v-btn(@click="$window.document.getElementById('imgFile').click()",text)
+      v-btn(@click="$window.document.getElementById('imgFile').click()",text,style="max-width:30vw")
         v-icon mdi-image
         span 読み込み
         input#imgFile(type="file",style="visibility:visible;width:0;height:0;")
