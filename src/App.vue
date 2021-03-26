@@ -1,31 +1,26 @@
 <template lang="pug">
-span
+
   v-app
-    v-app-bar(app, color="blue", dark, height="40px")
-      //- .d-flex.align-center
-      //-   v-img.shrink.mr-2(
-      //-     :src="require('./assets/favicon.png')",
-      //-     width="37",
-      //-     contain,
-      //-     transition="scale-transition"
-      //-   )
-
-      //-   <v-img
-      //-     alt="Vuetify Name"
-      //-     class="shrink mt-1 hidden-sm-and-down"
-      //-     contain
-      //-     min-width="100"
-      //-     src="https://cdn.vuetifyjs.com/images/logos/vuetify-name-dark.png"
-      //-     width="100"
-      //-   />
-      span アルファ版
-
+    v-app-bar(app, color="lime darken-3", dark, height="40px")
+      .d-flex.align-center
+        v-img.shrink.mr-2(
+          :src="require('./assets/favicon.png')",
+          width="37",
+          contain,
+          transition="scale-transition"
+        )
+      span 戦闘データ取得ツール
       v-spacer
+      v-btn(@click="$window.document.getElementById('imgFile').click()",text)
+        v-icon mdi-image
+        span 画像読み込み
+        input#imgFile(type="file",style="visibility:visible;width:0;height:0;")
+      //- v-btn(@click="$window.document.getElementById('imgFile').click()",text)
+      //-   v-icon mdi-reload
+      //-   //- span リセット
 
-      //- v-btn(icon)
-      //-   v-icon mdi-open-in-new
 
-    v-main.mx-2
+    v-main.mx-2.mt-2
       router-view
 </template>
 

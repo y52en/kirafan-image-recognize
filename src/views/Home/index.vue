@@ -2,20 +2,33 @@
 span
     v-row
         v-col
-            v-btn(@click="$window.document.getElementById('imgFile').click()",color="black",dark) 画像読み込み
-            input#imgFile(type="file",style="visibility:visible;width:0;height:0;")
-            v-btn(@click="resetStunPlace()",color="black",dark) スタン位置リセット
+            //- v-btn(@click="$window.document.getElementById('imgFile').click()",color="black",dark) 画像読み込み
+            v-btn(@click="resetStunPlace()",color="black",dark) 規定値に戻す
 
-        v-col(cols="12") 16:9、またはそれより縦長のスクショにのみ対応
+        v-col(cols="12") スタンゲージ1pxあたり {{ Math.round(stun1px * 100) / 100 }} % 
         v-col 
           span(v-for='p in ["enermy","player"]')
             span(v-for=" (elm , i) in stunPlace[p]" ,:key="i")
               v-btn( cols="2" , @click="slide = {isPlayer:p,place:i};display_slider = (display_slider === p + i)? undefined : p + i") {{ Math.round(elm / stunWidth * 10000) / 100 }} %
-              v-slider.sss(v-if="display_slider === p + i ",min=0,:max="stunWidth",step=1,:value="elm",@input="x = $event;elm= $event",style="max-width:500px")
-        v-col(cols="12") スタンゲージ1pxあたり {{ String(stun1px).replace(/(\.\d{2})\d+/, "$1") }} % 
+              v-slider.sss(v-if="display_slider === p + i ",min=0,:max="stunWidth",step=1,:value="elm",@input="x = $event;",style="max-width:500px")
 
         v-col(cols="12")
-            canvas#output(style="max-width: 90vw;max-height:calc(100vh - 50px);/*display:none;")
+            canvas#output(style="max-width: 90vw;max-height:calc(70vh - 50px);/*display:none;")
+
+        v-col 
+          span(v-for=" (elm , i) in recastPlace" ,:key="i")
+            v-btn( cols="2" , @click="slide = {type:'p',place:i};display_slider = (display_slider === 'r' + i)? undefined : 'r' + i") {{  Math.round((1 - elm / recastHeight) * 10000) / 100}} %
+            v-slider.sss(v-if="display_slider === 'r' + i ",min=0,:max="recastHeight",step=1,:value="elm",@input="x = $event;",style="max-width:500px")
+        v-col(cols="12") リキャストゲージ1pxあたり {{ recast1px }} %
+        
+        v-col
+          strong 使い方
+          br
+          | 戦闘画面のスクショを右上のボタンから読み込むとスタンゲージとリキャストのデータを表示します
+          br
+          | 16:9、またはそれより縦長のスクショにのみ対応
+          
+
     canvas#editorUse(style="max-width: 100vw;max-height:calc(100vh - 50px);display:none;")
     
 </template>
@@ -27,11 +40,15 @@ export default {
   data: () => ({
     stunData: { player: {}, enermy: {} },
     stunPlace: { player: {}, enermy: {} },
+    recastData: {},
+    recastPlace: {},
     stunPlace_default: { player: {}, enermy: {} },
+    recastPlace_default: {},
 
     display_slider: undefined,
     editedImg: undefined,
     stunWidth: 0,
+    recastHeight: 0,
 
     x: 0,
     slide: {
@@ -44,7 +61,10 @@ export default {
 
   computed: {
     stun1px() {
-      return 100 / this.stunWidth;
+      return Math.round(10000 / this.stunWidth) / 100;
+    },
+    recast1px() {
+      return Math.round(10000 / this.recastHeight) / 100;
     },
     canvas() {
       return {
@@ -61,8 +81,13 @@ export default {
     ObjectCopy(obj) {
       return JSON.parse(JSON.stringify(obj));
     },
+    reloadObj() {
+      this.stunPlace = this.ObjectCopy(this.stunPlace);
+      this.recastPlace = this.ObjectCopy(this.recastPlace);
+    },
     resetStunPlace() {
       this.stunPlace = this.ObjectCopy(this.stunPlace_default);
+      this.recastPlace = this.ObjectCopy(this.recastPlace_default);
     },
     isPlayerStr(isPlayer) {
       return isPlayer ? "player" : "enermy";
@@ -96,6 +121,16 @@ export default {
       });
     },
     getLineData(array) {
+      return array.reduce((accumulator, currentValue, x) => {
+        accumulator[x] = currentValue.reduce(
+          (accumulator, currentValue) => accumulator + currentValue[0],
+          0
+        );
+        return accumulator;
+      }, new Array(array.length).fill(0));
+    },
+    getRecastLineData(array) {
+      array = this.transpose(array);
       return array.reduce((accumulator, currentValue, x) => {
         accumulator[x] = currentValue.reduce(
           (accumulator, currentValue) => accumulator + currentValue[0],
@@ -204,13 +239,13 @@ export default {
     },
     getStunData(isPlayer, place) {
       const canvas = this.canvas.editorUse;
-      const ctx = canvas.getContext("2d");
+      // const ctx = canvas.getContext("2d");
 
       const x_width = 137;
       const y_start = 95;
       const fixed = isPlayer ? 0 : -2;
 
-      this.stunWidth = canvas.width * (x_width / 1334);
+      this.stunWidth = Math.floor(canvas.width * (x_width / 1334));
 
       const coordinate = [
         Math.floor(
@@ -221,14 +256,40 @@ export default {
         3,
       ];
 
-      ctx.fillStyle = "#00FFFF";
+      // ctx.fillStyle = "#00FFFF";
 
-      const b = this.getColorMap(canvas, ...coordinate);
+      const ColorMap = this.getColorMap(canvas, ...coordinate);
       // ctx.fillRect(...coordinate);
 
       this.stunData[this.isPlayerStr(isPlayer)][
         String(place)
-      ] = this.getLineData(b);
+      ] = this.getLineData(ColorMap);
+    },
+    getRecastData(place) {
+      const canvas = this.canvas.editorUse;
+      // const ctx = canvas.getContext("2d");
+
+      // const x_width = 137;
+      // const y_start = 95;
+      // const fixed = isPlayer ? 0 : -2;
+
+      this.recastHeight = Math.floor(canvas.height * (106 / 750));
+
+      // 683,576,83,106
+
+      const coordinate = [
+        Math.floor(canvas.width * ((545 + 138 * place) / 1334)),
+        Math.floor(canvas.height * (576 / 750)),
+        Math.floor(canvas.width * (83 / 1334)),
+        this.recastHeight - 2,
+      ];
+
+      // ctx.fillStyle = "#00FFFF";
+
+      const ColorMap = this.getColorMap(canvas, ...coordinate);
+      // ctx.fillRect(...coordinate);
+
+      this.recastData[String(place)] = this.getRecastLineData(ColorMap);
     },
     getColorMap(canvas, ...coordinate) {
       const width = coordinate[2];
@@ -278,6 +339,22 @@ export default {
       });
       return index;
     },
+    getRecastRate(place) {
+      const data = this.recastData[String(place)];
+      // console.log(data);
+      let tmp = 0;
+      let index = -2;
+      data
+        .slice()
+        .reverse()
+        .forEach((x, i) => {
+          if (x >= tmp && x >= 255 * (this.recastHeight / 2.5)) {
+            tmp = x;
+            index = i;
+          }
+        });
+      return data.length - index;
+    },
     drawImageAndLine() {
       const canvas = this.canvas.output;
       const ctx = canvas.getContext("2d");
@@ -322,11 +399,50 @@ export default {
           );
         });
       });
+      /*
+        Math.floor(canvas.width * ((545 + 138 * place) / 1334)),
+        Math.floor(canvas.height * (576 / 750)),
+        Math.floor(canvas.width * (83 / 1334)),
+        this.recastHeight - 1,
+       */
+
+      [0, 1, 2].forEach((place) => {
+        const recastPlace = this.recastPlace[String(place)];
+        // console.log(recastPlace);
+        ctx.fillStyle = "blue";
+        ctx.fillRect(
+          Math.floor(canvas.width * ((545 + 138 * place) / 1334)),
+          Math.floor(canvas.height * (576 / 750)) + recastPlace,
+          Math.floor(canvas.width * (83 / 1334)),
+          1
+        );
+
+        ctx.fillStyle = "red";
+        //start
+        ctx.fillRect(
+          Math.floor(canvas.width * ((545 + 138 * place) / 1334)),
+          Math.floor(canvas.height * (576 / 750)),
+          Math.floor(canvas.width * (83 / 1334)),
+          1
+        );
+        //end
+        ctx.fillRect(
+          Math.floor(canvas.width * ((545 + 138 * place) / 1334)),
+          Math.floor(canvas.height * (576 / 750)) + this.recastHeight,
+          Math.floor(canvas.width * (83 / 1334)),
+          1
+        );
+      });
     },
   },
 
   async mounted() {
-    window.v = this;
+    if (location.hostname === "localhost") {
+      window.v = this;
+      window.p = process;
+      // this.loadImg();
+    }
+
     document.getElementById("imgFile").addEventListener("change", (e) => {
       const file_reader = new FileReader();
       file_reader.addEventListener("load", async (e) => {
@@ -340,17 +456,33 @@ export default {
             ] = this.getStunRate(isPlayer, place);
           });
         });
+        [0, 1, 2].forEach((place) => {
+          this.getRecastData(place);
+          this.recastPlace[String(place)] = this.getRecastRate(place);
+        });
         this.stunPlace_default = this.ObjectCopy(this.stunPlace);
+        this.recastPlace_default = this.ObjectCopy(this.recastPlace);
+        this.reloadObj();
         this.drawImageAndLine();
       });
       file_reader.readAsDataURL(e.target.files[0]);
     });
   },
   watch: {
-    x(e) {
-      this.stunPlace[this.slide.isPlayer][this.slide.place] = e;
-      this.stunPlace = this.ObjectCopy(this.stunPlace);
+    stunPlace() {
       this.drawImageAndLine();
+    },
+    recastPlace() {
+      this.drawImageAndLine();
+    },
+    x(e) {
+      if (this.slide?.type === "p") {
+        this.recastPlace[this.slide.place] = e;
+        this.recastPlace = this.ObjectCopy(this.recastPlace);
+      } else {
+        this.stunPlace[this.slide.isPlayer][this.slide.place] = e;
+        this.stunPlace = this.ObjectCopy(this.stunPlace);
+      }
     },
   },
 };
